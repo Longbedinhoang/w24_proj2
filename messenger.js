@@ -1,4 +1,4 @@
-"use strict";
+'use strict';
 
 /********* Imports ********/
 
@@ -19,7 +19,7 @@ import {
 /********* Implementation ********/
 
 
-export default class MessengerClient {
+class MessengerClient {
   constructor(certAuthorityPublicKey, govPublicKey) {
       // the certificate authority DSA public key is used to
       // verify the authenticity and integrity of certificates
@@ -190,6 +190,13 @@ export default class MessengerClient {
     this.conns[name].seenPks.add(header.pk_sender)
     
     const plaintext = await decryptWithGCM(mk, ciphertext, header.receiver_iv, JSON.stringify(header));
-    return byteArrayToString(plaintext);
+    return bufferToString(plaintext);
   }
+}
+/*
+module.exports = { 
+  MessengerClient 
 };
+*/
+
+export default MessengerClient

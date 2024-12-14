@@ -1,20 +1,24 @@
-'use strict';
+'use strict'
 
 /********* Imports ********/
 
-import {
-    //cryptographic primitives  
-    bufferToString,
-    genRandomSalt,
-    HKDF, // async
-    HMACtoHMACKey, // async
-    HMACtoAESKey, // async
-    encryptWithGCM, // async
-    decryptWithGCM, // async
-    generateEG, // async
-    computeDH, // async
-    verifyWithECDSA, // async
-  } from "./lib.js";
+const {
+  /* The following functions are all of the cryptographic
+  primatives that you should need for this assignment.
+  See lib.js for details on usage. */
+  bufferToString,
+  genRandomSalt,
+  generateEG, // async
+  computeDH, // async
+  verifyWithECDSA, // async
+  HMACtoAESKey, // async
+  HMACtoHMACKey, // async
+  HKDF, // async
+  encryptWithGCM, // async
+  decryptWithGCM,
+  cryptoKeyToJSON, // async
+  govEncryptionDataStr
+} = require('./lib')
 
 /********* Implementation ********/
 
@@ -193,10 +197,5 @@ class MessengerClient {
     return bufferToString(plaintext);
   }
 }
-/*
-module.exports = { 
-  MessengerClient 
-};
-*/
 
-export default MessengerClient
+module.exports = { MessengerClient };

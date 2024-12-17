@@ -158,11 +158,22 @@ class MessengerClient {
         ck_r: chain_key, 
         ck_s: ck_s,
         seenPks: new Set(),
-        prevChainKey: null // Lưu chain key trước đó
+        initialKey: chain_key
       };
+
+      // Khởi tạo prevKeys khi tạo connection mới
+      if (!this.conns[name].prevKeys) {
+        this.conns[name].prevKeys = new Map();
+      }
+
     } else if (!this.conns[name].seenPks.has(header.pk_sender)) {
-      // Lưu chain key hiện tại trước khi ratchet
-      this.conns[name].prevChainKey = this.conns[name].ck_r;
+      // Đảm bảo prevKeys tồn tại
+      if (!this.conns[name].prevKeys) {
+        this.conns[name].prevKeys = new Map();
+      }
+
+      // Lưu khóa hiện tại vào Map trước khi ratchet
+      this.conns[name].prevKeys.set(header.pk_sender, this.conns[name].ck_r);
 
       const first_dh_output = await computeDH(this.myKeyPairs[name].sec_key, header.pk_sender);
       let [rk_first, ck_r] = await HKDF(first_dh_output, this.conns[name].rk, "ratchet-salt");
@@ -188,16 +199,32 @@ class MessengerClient {
       const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
       return bufferToString(plaintext);
     } catch (error) {
-      // Nếu giải mã thất bại và có chain key trước đó, thử với chain key đó
-      if (this.conns[name].prevChainKey) {
+      // Thử với các trạng thái khác nhau của khóa ban đầu
+      let testKey = this.conns[name].initialKey;
+      for (let i = 0; i < 10; i++) {
         try {
-          const mk = await HMACtoAESKey(this.conns[name].prevChainKey, "mk-str");
+          const mk = await HMACtoAESKey(testKey, "mk-str");
           const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
           return bufferToString(plaintext);
-        } catch (innerError) {
-          throw new Error("Không thể giải mã tin nhắn");
+        } catch (decryptError) {
+          testKey = await HMACtoHMACKey(testKey, "ck-str");
         }
       }
+
+      // Đảm bảo prevKeys tồn tại trước khi kiểm tra
+      if (this.conns[name].prevKeys && this.conns[name].prevKeys.has(header.pk_sender)) {
+        let testKey = this.conns[name].prevKeys.get(header.pk_sender);
+        for (let i = 0; i < 5; i++) {
+          try {
+            const mk = await HMACtoAESKey(testKey, "mk-str");
+            const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
+            return bufferToString(plaintext);
+          } catch (decryptError) {
+            testKey = await HMACtoHMACKey(testKey, "ck-str");
+          }
+        }
+      }
+      
       throw error;
     }
   }

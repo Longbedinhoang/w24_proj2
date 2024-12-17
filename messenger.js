@@ -140,6 +140,9 @@ class MessengerClient {
    * Return Type: string
    */
   async receiveMessage(name, [header, ciphertext]) {
+    // Kiểm tra tin nhắn đã nhận chưa
+    const messageId = JSON.stringify(header) + ciphertext;
+
     if (!(name in this.conns)) {
       // Khởi tạo kết nối mới như cũ
       const sender_cerk_pk = this.certs[name].pub_key;
@@ -158,35 +161,44 @@ class MessengerClient {
         ck_r: chain_key, 
         ck_s: ck_s,
         seenPks: new Set(),
-        initialKey: chain_key
+        initialKey: chain_key,
+        prevKeys: new Map(),
+        seenMessages: new Set()
       };
 
-      // Khởi tạo prevKeys khi tạo connection mới
-      if (!this.conns[name].prevKeys) {
-        this.conns[name].prevKeys = new Map();
+    } else {
+      // Đảm bảo seenMessages tồn tại
+      if (!this.conns[name].seenMessages) {
+        this.conns[name].seenMessages = new Set();
       }
 
-    } else if (!this.conns[name].seenPks.has(header.pk_sender)) {
-      // Đảm bảo prevKeys tồn tại
-      if (!this.conns[name].prevKeys) {
-        this.conns[name].prevKeys = new Map();
+      if (!this.conns[name].seenPks.has(header.pk_sender)) {
+        // Đảm bảo prevKeys tồn tại
+        if (!this.conns[name].prevKeys) {
+          this.conns[name].prevKeys = new Map();
+        }
+
+        // Lưu khóa hiện tại vào Map trước khi ratchet
+        this.conns[name].prevKeys.set(header.pk_sender, this.conns[name].ck_r);
+
+        const first_dh_output = await computeDH(this.myKeyPairs[name].sec_key, header.pk_sender);
+        let [rk_first, ck_r] = await HKDF(first_dh_output, this.conns[name].rk, "ratchet-salt");
+
+        const fresh_pair = await generateEG();
+        this.myKeyPairs[name] = {pub_key: fresh_pair.pub, sec_key: fresh_pair.sec};
+
+        const second_dh_output = await computeDH(this.myKeyPairs[name].sec_key, header.pk_sender);
+        const [rk, ck_s] = await HKDF(second_dh_output, rk_first, "ratchet-salt");
+        
+        this.conns[name].rk = rk;
+        this.conns[name].ck_s = ck_s;
+        this.conns[name].ck_r = ck_r;
       }
+    }
 
-      // Lưu khóa hiện tại vào Map trước khi ratchet
-      this.conns[name].prevKeys.set(header.pk_sender, this.conns[name].ck_r);
-
-      const first_dh_output = await computeDH(this.myKeyPairs[name].sec_key, header.pk_sender);
-      let [rk_first, ck_r] = await HKDF(first_dh_output, this.conns[name].rk, "ratchet-salt");
-
-      const fresh_pair = await generateEG();
-      this.myKeyPairs[name] = {pub_key: fresh_pair.pub, sec_key: fresh_pair.sec};
-
-      const second_dh_output = await computeDH(this.myKeyPairs[name].sec_key, header.pk_sender);
-      const [rk, ck_s] = await HKDF(second_dh_output, rk_first, "ratchet-salt");
-      
-      this.conns[name].rk = rk;
-      this.conns[name].ck_s = ck_s;
-      this.conns[name].ck_r = ck_r;
+    // Kiểm tra tin nhắn đã nhận
+    if (this.conns[name].seenMessages.has(messageId)) {
+      throw new Error("Message replay detected");
     }
 
     // Thử giải mã với khóa hiện tại
@@ -197,6 +209,10 @@ class MessengerClient {
       this.conns[name].seenPks.add(header.pk_sender);
       
       const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
+      
+      // Thêm tin nhắn vào danh sách đã nhận
+      this.conns[name].seenMessages.add(messageId);
+      
       return bufferToString(plaintext);
     } catch (error) {
       // Thử với các trạng thái khác nhau của khóa ban đầu
@@ -205,6 +221,10 @@ class MessengerClient {
         try {
           const mk = await HMACtoAESKey(testKey, "mk-str");
           const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
+          
+          // Thêm tin nhắn vào danh sách đã nhận
+          this.conns[name].seenMessages.add(messageId);
+          
           return bufferToString(plaintext);
         } catch (decryptError) {
           testKey = await HMACtoHMACKey(testKey, "ck-str");
@@ -218,6 +238,10 @@ class MessengerClient {
           try {
             const mk = await HMACtoAESKey(testKey, "mk-str");
             const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
+            
+            // Thêm tin nhắn vào danh sách đã nhận
+            this.conns[name].seenMessages.add(messageId);
+            
             return bufferToString(plaintext);
           } catch (decryptError) {
             testKey = await HMACtoHMACKey(testKey, "ck-str");

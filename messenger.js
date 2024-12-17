@@ -158,19 +158,11 @@ class MessengerClient {
         ck_r: chain_key, 
         ck_s: ck_s,
         seenPks: new Set(),
-        skippedKeys: new Map(), // Lưu trữ các khóa bị bỏ qua
-        oldChainKeys: new Map() // Lưu trữ các chain key cũ
+        prevChainKey: null // Lưu chain key trước đó
       };
-
     } else if (!this.conns[name].seenPks.has(header.pk_sender)) {
       // Lưu chain key hiện tại trước khi ratchet
-      const currentPk = Array.from(this.conns[name].seenPks)[this.conns[name].seenPks.size - 1];
-      if (currentPk) {
-        this.conns[name].oldChainKeys.set(currentPk, {
-          ck_r: this.conns[name].ck_r,
-          ck_s: this.conns[name].ck_s
-        });
-      }
+      this.conns[name].prevChainKey = this.conns[name].ck_r;
 
       const first_dh_output = await computeDH(this.myKeyPairs[name].sec_key, header.pk_sender);
       let [rk_first, ck_r] = await HKDF(first_dh_output, this.conns[name].rk, "ratchet-salt");
@@ -196,15 +188,14 @@ class MessengerClient {
       const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
       return bufferToString(plaintext);
     } catch (error) {
-      // Nếu giải mã thất bại, thử với các khóa cũ
-      if (this.conns[name].oldChainKeys.has(header.pk_sender)) {
-        const oldKeys = this.conns[name].oldChainKeys.get(header.pk_sender);
+      // Nếu giải mã thất bại và có chain key trước đó, thử với chain key đó
+      if (this.conns[name].prevChainKey) {
         try {
-          const mk = await HMACtoAESKey(oldKeys.ck_r, "mk-str");
+          const mk = await HMACtoAESKey(this.conns[name].prevChainKey, "mk-str");
           const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
           return bufferToString(plaintext);
         } catch (innerError) {
-          throw new Error("Không thể giải mã tin nhắn với bất kỳ khóa nào");
+          throw new Error("Không thể giải mã tin nhắn");
         }
       }
       throw error;

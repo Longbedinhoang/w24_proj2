@@ -84,53 +84,48 @@ class MessengerClient {
    */
 
   async sendMessage(name, plaintext) {    
-    //generate rk / ck if user has not communicated with name before.
     if (!(name in this.conns)) {
       const bob_public_key = this.certs[name].pub_key;
-
       const raw_root_key = await computeDH(this.myKeyPairs.cert_sk, bob_public_key);
-
       const fresh_pair = await generateEG();
-      this.myKeyPairs[name] = {pub_key: fresh_pair.pub, sec_key: fresh_pair.sec}; //to be updated further during DH ratchet in receiveMessage();
+      this.myKeyPairs[name] = {pub_key: fresh_pair.pub, sec_key: fresh_pair.sec};
 
-      const hkdf_input_key = await computeDH(this.myKeyPairs[name].sec_key, bob_public_key); //const hkdf_input_key = await computeDH(this.myKeyPairs.sec_key, header.pk_sender);
-
+      const hkdf_input_key = await computeDH(this.myKeyPairs[name].sec_key, bob_public_key);
       const [root_key, chain_key] = await HKDF(hkdf_input_key, raw_root_key, "ratchet-salt");
       
       this.conns[name] = {rk: root_key, ck_s: chain_key};
-
-      this.conns[name].seenPks = new Set()
-
+      this.conns[name].seenPks = new Set();
     }
-    //at this point we know we have a rk and ck_s
 
-    //ck_s is undefined because receive() is first called, which adds rk and ck_r but not ck_s
+    // Generate message key
     const ck_s = await HMACtoHMACKey(this.conns[name].ck_s, "ck-str");
     const mk = await HMACtoAESKey(this.conns[name].ck_s, "mk-str");
     const mk_buffer = await HMACtoAESKey(this.conns[name].ck_s, "mk-str", true);
-    this.conns[name].ck_s = ck_s; 
+    this.conns[name].ck_s = ck_s;
 
-    //form header
+    // Generate IVs
     const ivGov = genRandomSalt();
-    const receiver_iv = genRandomSalt();
+    const receiverIV = genRandomSalt();
+
+    // Generate ephemeral keypair for government
     const new_gov_pair = await generateEG();
+    const dh_secret = await computeDH(new_gov_pair.sec, this.govPublicKey);
+    const govKey = await HMACtoAESKey(dh_secret, govEncryptionDataStr);
 
-    //gov needs to be able to derive dh_secret given 1) govPublicKey and 2) new_gov_par.pub (vGov)
-    const dh_secret = await computeDH(new_gov_pair.sec, this.govPublicKey); // pub^sec --> (g^b)^a
-    const dh_secret_key = await HMACtoAESKey(dh_secret, "AES-generation"); //k = H(v, m) Since computeDH() output is configured with HMAC, need to run the output through HMACtoAESKey() to generate a key that can be used with AES-GCM
-    const cGov = await encryptWithGCM(dh_secret_key, mk_buffer, ivGov); 
-    
-    //form header 
-    const header = {vGov: new_gov_pair.pub, 
-      cGov: cGov, 
-      receiver_iv: receiver_iv, 
+    // Tạo header
+    const header = {
+      vGov: new_gov_pair.pub,
       ivGov: ivGov,
-      pk_sender: this.myKeyPairs[name].pub_key 
-     }; 
+      receiverIV: receiverIV,
+      pk_sender: this.myKeyPairs[name].pub_key
+    };
 
-    //encrypt message
-    const ciphertext = await encryptWithGCM(mk, plaintext, receiver_iv, JSON.stringify(header));
+    // Mã hóa cho government
+    const cGov = await encryptWithGCM(govKey, mk_buffer, ivGov);
+    header.cGov = cGov;
 
+    // Mã hóa tin nhắn
+    const ciphertext = await encryptWithGCM(mk, plaintext, receiverIV, JSON.stringify(header));
     return [header, ciphertext];
   }
 
@@ -193,7 +188,7 @@ class MessengerClient {
     this.conns[name].ck_r = ck_r;
     this.conns[name].seenPks.add(header.pk_sender)
     
-    const plaintext = await decryptWithGCM(mk, ciphertext, header.receiver_iv, JSON.stringify(header));
+    const plaintext = await decryptWithGCM(mk, ciphertext, header.receiverIV, JSON.stringify(header));
     return bufferToString(plaintext);
   }
 }

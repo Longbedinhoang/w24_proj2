@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0084ff">
+    <title>Ứng dụng Chat</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/assets/icon-192x192.png">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth Forms -->
+        <div id="auth-container" class="container">
+            <div class="auth-form" id="login-form">
+                <h2>Đăng nhập</h2>
+                <input type="text" id="login-username" placeholder="Tên đăng nhập">
+                <input type="password" id="login-password" placeholder="Mật khẩu">
+                <button id="login-btn">Đăng nhập</button>
+                <p>Chưa có tài khoản? <a href="#" id="show-register">Đăng ký</a></p>
+            </div>
+            
+            <div class="auth-form hidden" id="register-form">
+                <h2>Đăng ký</h2>
+                <input type="text" id="register-username" placeholder="Tên đăng nhập">
+                <input type="password" id="register-password" placeholder="Mật khẩu">
+                <button id="register-btn">Đăng ký</button>
+                <p>Đã có tài khoản? <a href="#" id="show-login">Đăng nhập</a></p>
+            </div>
+        </div>
+
+        <!-- Main Chat Interface -->
+        <div id="chat-container" class="container hidden">
+            <div class="sidebar">
+                <div class="user-profile">
+                    <img id="user-avatar" src="assets/default-avatar.png" alt="Avatar">
+                    <span id="user-name"></span>
+                    <button id="logout-btn">Đăng xuất</button>
+                </div>
+                <div class="users-list" id="users-list">
+                    <!-- Users will be added here dynamically -->
+                </div>
+            </div>
+            
+            <div class="chat-area">
+                <div class="chat-header">
+                    <h3 id="chat-title">Chat</h3>
+                </div>
+                <div class="messages" id="messages">
+                    <!-- Messages will be added here dynamically -->
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="message-input" placeholder="Nhập tin nhắn...">
+                    <button id="file-btn">📎</button>
+                    <input type="file" id="file-input" hidden>
+                    <button id="send-btn">Gửi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/auth.js"></script>
+    <script src="js/userManager.js"></script>
+    <script src="js/chatUI.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 

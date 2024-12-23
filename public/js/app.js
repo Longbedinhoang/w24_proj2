@@ -1,7 +1,7 @@
 class ChatApp {
     constructor() {
         this.initialized = false;
-        this.messenger = null;
+        this.socket = io('http://localhost:3000');
         this.initializeApp();
     }
 
@@ -9,7 +9,7 @@ class ChatApp {
         try {
             // Kiểm tra đăng nhập
             if (auth.currentUser) {
-                await this.initializeChat();
+                await this.initializeChat(auth.currentUser);
             }
 
             // Lắng nghe sự kiện đăng nhập thành công
@@ -25,7 +25,6 @@ class ChatApp {
 
         } catch (error) {
             console.error('Lỗi khởi tạo ứng dụng:', error);
-            alert('Không thể khởi tạo ứng dụng. Vui lòng tải lại trang.');
         }
     }
 
@@ -33,135 +32,41 @@ class ChatApp {
         if (this.initialized) return;
 
         try {
-            // Khởi tạo messenger
-            this.messenger = new Messenger({
-                userId: user.id,
-                onMessage: this.handleIncomingMessage.bind(this),
-                onUserStatusChange: this.handleUserStatusChange.bind(this),
-                onError: this.handleError.bind(this)
+            // Kết nối socket với username
+            this.socket.emit('join', user.username);
+
+            // Lắng nghe tin nhắn mới
+            this.socket.on('receive-message', (data) => {
+                chatUI.addMessage(data);
             });
 
-            await this.messenger.connect();
+            // Lắng nghe user mới kết nối
+            this.socket.on('user-connected', (username) => {
+                userManager.updateUserStatus(username, 'online');
+            });
 
-            // Kết nối các components
-            this.connectComponents();
-
-            // Load danh sách người dùng
-            await this.loadUsers();
+            // Lắng nghe user ngắt kết nối
+            this.socket.on('user-disconnected', (username) => {
+                userManager.updateUserStatus(username, 'offline');
+            });
 
             this.initialized = true;
 
         } catch (error) {
             console.error('Lỗi khởi tạo chat:', error);
-            alert('Không thể kết nối tới server chat. Vui lòng thử lại sau.');
-        }
-    }
-
-    connectComponents() {
-        // Kết nối UserManager với ChatUI
-        userManager.onUserSelected(user => {
-            chatUI.setReceiver(user);
-            this.loadChatHistory(user.id);
-        });
-
-        // Kết nối ChatUI với Messenger
-        chatUI.onSendMessage = async (message) => {
-            try {
-                await this.messenger.sendMessage(message);
-            } catch (error) {
-                console.error('Lỗi gửi tin nhắn:', error);
-                alert('Không thể gửi tin nhắn. Vui lòng thử lại.');
-            }
-        };
-
-        // Xử lý upload file
-        chatUI.onFileUpload = async (file, message) => {
-            try {
-                await this.messenger.sendFile(file, message);
-            } catch (error) {
-                console.error('Lỗi upload file:', error);
-                alert('Không thể gửi file. Vui lòng thử lại.');
-            }
-        };
-    }
-
-    async loadUsers() {
-        try {
-            const users = await this.messenger.getUsers();
-            users.forEach(user => {
-                if (user.id !== auth.currentUser.id) {
-                    userManager.addUser(user);
-                }
-            });
-        } catch (error) {
-            console.error('Lỗi tải danh sách người dùng:', error);
-        }
-    }
-
-    async loadChatHistory(userId) {
-        try {
-            const messages = await this.messenger.getMessages(userId);
-            chatUI.clearMessages();
-            messages.forEach(message => chatUI.addMessage(message));
-        } catch (error) {
-            console.error('Lỗi tải lịch sử chat:', error);
-        }
-    }
-
-    handleIncomingMessage(message) {
-        // Cập nhật UI khi có tin nhắn mới
-        chatUI.addMessage(message);
-
-        // Cập nhật số tin nhắn chưa đọc nếu không phải chat hiện tại
-        if (!chatUI.currentReceiver || message.sender !== chatUI.currentReceiver.id) {
-            userManager.updateUnreadCount(message.sender, 1);
-        }
-    }
-
-    handleUserStatusChange(userId, status) {
-        userManager.updateUserStatus(userId, status);
-    }
-
-    handleError(error) {
-        console.error('Lỗi messenger:', error);
-        if (error.type === 'connection') {
-            this.showReconnectDialog();
         }
     }
 
     handleLogout() {
         this.initialized = false;
-        if (this.messenger) {
-            this.messenger.disconnect();
-            this.messenger = null;
+        if (this.socket) {
+            this.socket.disconnect();
         }
-        chatUI.clearMessages();
-        userManager.clearUsers();
-    }
-
-    showReconnectDialog() {
-        const dialog = document.createElement('div');
-        dialog.className = 'reconnect-dialog';
-        dialog.innerHTML = `
-            <div class="reconnect-content">
-                <h3>Mất kết nối</h3>
-                <p>Đang cố gắng kết nối lại...</p>
-                <button id="retry-btn">Thử lại</button>
-            </div>
-        `;
-
-        document.body.appendChild(dialog);
-
-        document.getElementById('retry-btn').onclick = async () => {
-            try {
-                await this.messenger.reconnect();
-                dialog.remove();
-            } catch (error) {
-                console.error('Không thể kết nối lại:', error);
-            }
-        };
     }
 }
+
+// Khởi tạo ứng dụng
+const app = new ChatApp();
 
 // Thêm styles cho dialog reconnect
 const appStyles = document.createElement('style');
@@ -202,9 +107,6 @@ appStyles.textContent = `
 `;
 
 document.head.appendChild(appStyles);
-
-// Khởi tạo ứng dụng
-const app = new ChatApp();
 
 // Đăng ký service worker nếu được hỗ trợ
 if ('serviceWorker' in navigator) {

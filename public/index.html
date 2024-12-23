@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Messenger</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Auth Forms -->
+    <div id="authForms" class="auth-container">
+        <div class="auth-box">
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="login">Đăng nhập</button>
+                <button class="tab-btn" data-tab="register">Đăng ký</button>
+            </div>
+            
+            <form id="loginForm" class="auth-form">
+                <input type="text" placeholder="Tên đăng nhập" required>
+                <input type="password" placeholder="Mật khẩu" required>
+                <button type="submit">Đăng nhập</button>
+            </form>
+
+            <form id="registerForm" class="auth-form hidden">
+                <input type="text" placeholder="Tên đăng nhập" required>
+                <input type="password" placeholder="Mật khẩu" required>
+                <input type="password" placeholder="Xác nhận mật khẩu" required>
+                <button type="submit">Đăng ký</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Chat Interface -->
+    <div id="chatInterface" class="chat-container hidden">
+        <div class="sidebar">
+            <div class="user-profile">
+                <img src="assets/default-avatar.png" alt="Avatar" id="userAvatar">
+                <span id="userName">User</span>
+                <button id="logoutBtn">Đăng xuất</button>
+            </div>
+            <div class="user-search">
+                <input type="text" placeholder="Tìm kiếm người dùng...">
+            </div>
+            <div class="users-list" id="usersList">
+                <!-- Users will be populated here -->
+            </div>
+        </div>
+
+        <div class="chat-main">
+            <div class="chat-header">
+                <span id="currentChatUser">Chọn người dùng để bắt đầu chat</span>
+            </div>
+            <div class="messages-container" id="messagesContainer">
+                <!-- Messages will be populated here -->
+            </div>
+            <div class="chat-input-container">
+                <button id="fileUploadBtn" class="upload-btn">
+                    <img src="assets/upload-icon.png" alt="Upload">
+                </button>
+                <input type="file" id="fileInput" hidden>
+                <input type="text" id="messageInput" placeholder="Nhập tin nhắn...">
+                <button id="sendMessageBtn">Gửi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load messenger.js trước các file khác -->
+    <script src="../messenger.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/userManager.js"></script>
+    <script src="js/chatUI.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html> 

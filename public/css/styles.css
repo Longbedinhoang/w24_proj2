@@ -60,6 +60,14 @@ body {
 .user-profile {
     padding: 20px;
     border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.user-info {
+    flex: 1;
+    padding-left: 10px;
 }
 
 .users-list {

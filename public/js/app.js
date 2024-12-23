@@ -1,8 +1,27 @@
 class ChatApp {
     constructor() {
         this.initialized = false;
-        this.socket = io('http://localhost:3000');
+        this.socket = null;
+        this.currentUser = null;
         this.initializeApp();
+        this.setupVisibilityHandler();
+        this.setupBeforeUnloadHandler();
+    }
+
+    setupVisibilityHandler() {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && this.currentUser && !this.socket?.connected) {
+                this.initializeChat(this.currentUser);
+            }
+        });
+    }
+
+    setupBeforeUnloadHandler() {
+        window.addEventListener('beforeunload', () => {
+            if (this.socket && this.socket.connected) {
+                this.socket.emit('page-close', auth.sessionToken);
+            }
+        });
     }
 
     async initializeApp() {
@@ -32,8 +51,37 @@ class ChatApp {
         if (this.initialized) return;
 
         try {
-            // Kết nối socket với username
-            this.socket.emit('join', user.username);
+            this.currentUser = user;
+            this.socket = io('http://localhost:3000', {
+                auth: {
+                    token: auth.sessionToken,
+                    userId: user.id,
+                    username: user.username
+                }
+            });
+
+            this.socket.on('session_expired', () => {
+                auth.handleSessionExpired();
+            });
+
+            // Nhận danh sách users
+            this.socket.on('users-list', (users) => {
+                users.forEach(user => {
+                    userManager.addUser({
+                        id: user.id,
+                        username: user.username,
+                        status: user.status
+                    });
+                });
+            });
+
+            // Load danh sách users từ localStorage
+            userManager.loadInitialUsers();
+
+            // Nhận user mới
+            this.socket.on('user-added', (user) => {
+                userManager.addUser(user);
+            });
 
             // Lắng nghe tin nhắn mới
             this.socket.on('receive-message', (data) => {
@@ -41,8 +89,12 @@ class ChatApp {
             });
 
             // Lắng nghe user mới kết nối
-            this.socket.on('user-connected', (username) => {
-                userManager.updateUserStatus(username, 'online');
+            this.socket.on('user-connected', (userData) => {
+                userManager.addUser({
+                    id: userData.id,
+                    username: userData.username,
+                    status: 'online'
+                });
             });
 
             // Lắng nghe user ngắt kết nối
@@ -59,8 +111,11 @@ class ChatApp {
 
     handleLogout() {
         this.initialized = false;
+        this.currentUser = null;
         if (this.socket) {
+            this.socket.emit('logout', auth.sessionToken);
             this.socket.disconnect();
+            this.socket = null;
         }
     }
 }

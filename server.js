@@ -42,7 +42,10 @@ io.use((socket, next) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-    console.log(`User ${socket.username} connected with session`);
+    // Chỉ log khi là kết nối mới (không phải reconnect)
+    if (!activeSessions.has(socket.userId)) {
+        console.log(`User ${socket.username} connected`);
+    }
     
     // Cập nhật session và trạng thái online
     activeSessions.set(socket.userId, {
@@ -58,7 +61,8 @@ io.on('connection', (socket) => {
         username: socket.username,
         status: 'online'
     });
-    
+    console.log(`${socket.username} is now online`);
+
     // Gửi danh sách users hiện tại
     const users = Array.from(io.sockets.sockets.values())
         .filter(s => s.username && s.userId !== socket.userId)
@@ -74,7 +78,7 @@ io.on('connection', (socket) => {
         if (socket.sessionToken === token) {
             activeSessions.delete(socket.userId);
             socket.broadcast.emit('user-disconnected', socket.username);
-            console.log(`User ${socket.username} logged out`);
+            console.log(`${socket.username} is now offline (logged out)`);
         }
     });
 
@@ -82,7 +86,6 @@ io.on('connection', (socket) => {
     socket.on('page-close', (token) => {
         if (socket.sessionToken === token) {
             activeSessions.delete(socket.userId);
-            console.log(`User ${socket.username} closed page`);
         }
     });
 
@@ -95,7 +98,7 @@ io.on('connection', (socket) => {
             if (!stillConnected) {
                 activeSessions.delete(socket.userId);
                 socket.broadcast.emit('user-disconnected', socket.username);
-                console.log(`User ${socket.username} disconnected`);
+                console.log(`${socket.username} is now offline`);
             }
         }, 2000);
     });

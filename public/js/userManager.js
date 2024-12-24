@@ -77,7 +77,8 @@ class UserManager {
                     <div class="user-info">
                         <div class="user-name">${user.username}</div>
                         <div class="user-status">
-                            ${user.status === 'online' ? '🟢 Đang hoạt động' : '⚫ Không hoạt động'}
+                            <span class="status-icon">${user.status === 'online' ? '🟢' : '⚫'}</span>
+                            ${user.status === 'online' ? 'Đang hoạt động' : 'Không hoạt động'}
                         </div>
                     </div>
                 </div>

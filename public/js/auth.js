@@ -62,6 +62,38 @@ class Auth {
         document.getElementById('show-register').addEventListener('click', this.showRegisterForm);
         document.getElementById('show-login').addEventListener('click', this.showLoginForm);
         document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+
+        // Xử lý enter cho form đăng nhập
+        document.getElementById('login-username').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('login-password').focus();
+            }
+        });
+        
+        document.getElementById('login-password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.login();
+            }
+        });
+
+        // Xử lý enter cho form đăng ký
+        document.getElementById('register-username').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('register-password').focus();
+            }
+        });
+        
+        document.getElementById('register-password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('register-confirm-password').focus();
+            }
+        });
+        
+        document.getElementById('register-confirm-password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                this.register();
+            }
+        });
     }
 
     loadUsers() {

@@ -16,20 +16,33 @@ class UserManager {
     }
 
     addUser(user) {
-        if (user.username === auth.currentUser.username || 
-            Array.from(this.users.values()).some(u => u.username === user.username)) {
+        // Nếu là chính mình thì không thêm
+        if (user.username === auth.currentUser.username) {
             return;
         }
-        user.status = 'online';
+
+        // Nếu user đã tồn tại, chỉ cập nhật trạng thái
+        const existingUser = Array.from(this.users.values())
+            .find(u => u.username === user.username);
+        if (existingUser) {
+            existingUser.status = user.status;
+            this.renderUsersList();
+            return;
+        }
+
+        // Thêm user mới
+        user.status = user.status || 'online';
         this.users.set(user.id, user);
         this.renderUsersList();
     }
 
-    updateUserStatus(userId, status) {
-        const user = Array.from(this.users.values()).find(u => u.username === userId);
+    updateUserStatus(username, status) {
+        const user = Array.from(this.users.values())
+            .find(u => u.username === username);
         if (user) {
             user.status = status;
             this.renderUsersList();
+            console.log(`Updated ${username} status to ${status}`);
         }
     }
 
@@ -56,14 +69,16 @@ class UserManager {
 
         this.users.forEach(user => {
             const userElement = document.createElement('div');
-            userElement.className = `user-item ${user.status === 'online' ? 'online' : 'offline'}`;
+            userElement.className = `user-item ${user.status}`;
             userElement.dataset.userId = user.id;
             
             userElement.innerHTML = `
                 <div class="user-item-content">
                     <div class="user-info">
                         <div class="user-name">${user.username}</div>
-                        <div class="user-status">${user.status === 'online' ? 'Đang hoạt động' : 'Không hoạt động'}</div>
+                        <div class="user-status">
+                            ${user.status === 'online' ? '🟢 Đang hoạt động' : '⚫ Không hoạt động'}
+                        </div>
                     </div>
                 </div>
             `;

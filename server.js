@@ -42,28 +42,30 @@ io.use((socket, next) => {
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-    console.log(`User ${socket.username} reconnected with session`);
+    console.log(`User ${socket.username} connected with session`);
     
-    // Broadcast to others that user is online
-    socket.broadcast.emit('user-connected', {
-        id: socket.userId,
-        username: socket.username
-    });
-    
-    // Cập nhật session khi có kết nối mới
+    // Cập nhật session và trạng thái online
     activeSessions.set(socket.userId, {
         token: socket.sessionToken,
         lastActivity: Date.now(),
-        socketId: socket.id
+        socketId: socket.id,
+        status: 'online'
     });
 
-    // Gửi danh sách users
+    // Broadcast user online status
+    socket.broadcast.emit('user-connected', {
+        id: socket.userId,
+        username: socket.username,
+        status: 'online'
+    });
+    
+    // Gửi danh sách users hiện tại
     const users = Array.from(io.sockets.sockets.values())
         .filter(s => s.username && s.userId !== socket.userId)
         .map(s => ({
             id: s.userId,
             username: s.username,
-            status: 'online'  // Nếu có trong socket list thì chắc chắn đang online
+            status: activeSessions.has(s.userId) ? 'online' : 'offline'
         }));
     socket.emit('users-list', users);
 
@@ -87,14 +89,13 @@ io.on('connection', (socket) => {
     // Clean up on disconnect
     socket.on('disconnect', () => {
         setTimeout(() => {
-            // Kiểm tra xem user còn kết nối nào khác không
             const stillConnected = Array.from(io.sockets.sockets.values())
                 .some(s => s.userId === socket.userId && s.id !== socket.id);
             
             if (!stillConnected) {
-                // Chỉ xóa session nếu không còn kết nối nào
                 activeSessions.delete(socket.userId);
                 socket.broadcast.emit('user-disconnected', socket.username);
+                console.log(`User ${socket.username} disconnected`);
             }
         }, 2000);
     });

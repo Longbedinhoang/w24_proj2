@@ -104,7 +104,16 @@ io.on('connection', (socket) => {
     });
 
     socket.on('send-message', (data) => {
-        socket.broadcast.emit('receive-message', data);
+        // Tìm socket của người nhận
+        const receiverSocket = Array.from(io.sockets.sockets.values())
+            .find(s => s.username === data.receiver);
+        
+        if (receiverSocket) {
+            // Gửi tin nhắn chỉ cho người nhận
+            receiverSocket.emit('receive-message', data);
+            // Gửi lại tin nhắn cho người gửi để xác nhận
+            socket.emit('receive-message', data);
+        }
     });
 
     socket.on('new-user', (user) => {

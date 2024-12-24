@@ -94,6 +94,12 @@ body {
     flex: 1;
     display: flex;
     flex-direction: column;
+    background-color: #f5f5f5;
+    height: 100%;
+}
+
+.chat-area.active {
+    background-color: white;
 }
 
 .chat-header {
@@ -103,24 +109,55 @@ body {
 .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: 20px 40px;
+    position: relative;
+    height: calc(100% - 120px);
+}
+
+.message-wrapper {
+    margin: 4px 0;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    clear: both;
+}
+
+.message-wrapper:first-child {
+    margin-top: 4px;
+}
+
+.message-wrapper:last-child {
+    margin-bottom: 4px;
+}
+
+.message-wrapper.sent {
+    float: right;
+}
+
+.message-wrapper.received {
+    float: left;
 }
 
 .message {
-    margin: 10px 0;
-    padding: 10px;
-    border-radius: 8px;
     max-width: 70%;
+    position: relative;
+    display: inline-block;
 }
 
-.message.sent {
+.message-wrapper.sent .message {
+    margin-left: auto;
+    float: right;
+}
+
+.message-content {
+    padding: 10px 15px;
+    border-radius: 15px;
+    background: #e9ecef;
+}
+
+.message-wrapper.sent .message-content {
     background: #0084ff;
     color: white;
-    margin-left: auto;
-}
-
-.message.received {
-    background: #e9ecef;
 }
 
 .chat-input {
@@ -190,4 +227,50 @@ body {
     font-weight: 600;
     color: #333;
     font-size: 18px;
+}
+
+.messages {
+    padding: 20px 40px;
+}
+
+.empty-chat-message {
+    color: #666;
+    font-style: italic;
+    font-size: 14px;
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    width: 100%;
+}
+
+.chat-area.active .empty-chat-message {
+    display: block;
+}
+
+.chat-area.has-messages .empty-chat-message {
+    display: none;
+}
+
+.messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messages::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages::-webkit-scrollbar-thumb {
+    background: #bbb;
+    border-radius: 3px;
+}
+
+.messages::-webkit-scrollbar-thumb:hover {
+    background: #999;
+}
+
+.chat-area.has-messages .messages {
+    display: block;
 } 

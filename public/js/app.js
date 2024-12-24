@@ -60,6 +60,10 @@ class ChatApp {
                 }
             });
 
+            // Disable chat input cho đến khi chọn người nhận
+            document.getElementById('message-input').disabled = true;
+            document.getElementById('send-btn').disabled = true;
+
             this.socket.on('session_expired', () => {
                 auth.handleSessionExpired();
             });
@@ -85,7 +89,12 @@ class ChatApp {
 
             // Lắng nghe tin nhắn mới
             this.socket.on('receive-message', (data) => {
-                chatUI.addMessage(data);
+                // Chỉ hiển thị tin nhắn nếu là người gửi hoặc người nhận
+                if (data.sender === chatUI.currentReceiver?.username || 
+                    (data.receiver === auth.currentUser.username && 
+                     data.sender === chatUI.currentReceiver?.username)) {
+                    chatUI.addMessage(data);
+                }
             });
 
             // Lắng nghe user mới kết nối

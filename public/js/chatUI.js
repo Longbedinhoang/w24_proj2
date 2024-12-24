@@ -7,11 +7,25 @@ class ChatUI {
         this.fileButton = document.getElementById('file-btn');
         this.fileInput = document.getElementById('file-input');
         this.currentReceiver = null;
+        this.chatArea = document.querySelector('.chat-area');
         
         this.initializeEventListeners();
+        this.emptyMessage = this.createEmptyMessage();
+    }
+
+    createEmptyMessage() {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.className = 'empty-chat-message';
+        emptyMessage.textContent = 'Bắt đầu trò chuyện';
+        return emptyMessage;
     }
 
     initializeEventListeners() {
+        // Lắng nghe sự kiện khi chọn user để chat
+        document.addEventListener('userSelected', (e) => {
+            this.setReceiver(e.detail);
+        });
+
         // Xử lý gửi tin nhắn
         this.sendButton.addEventListener('click', () => this.sendMessage());
         this.messageInput.addEventListener('keypress', (e) => {
@@ -35,7 +49,12 @@ class ChatUI {
     setReceiver(user) {
         this.currentReceiver = user;
         this.clearMessages();
-        document.getElementById('chat-title').textContent = user.name;
+        document.getElementById('chat-title').textContent = user.username;
+        // Enable input khi đã chọn người nhận
+        this.messageInput.disabled = false;
+        this.sendButton.disabled = false;
+        this.chatArea.classList.add('active');
+        this.messageContainer.appendChild(this.emptyMessage);
     }
 
     // Gửi tin nhắn
@@ -46,17 +65,17 @@ class ChatUI {
         try {
             const message = {
                 content,
-                sender: auth.currentUser.id,
-                receiver: this.currentReceiver.id,
-                timestamp: new Date(),
-                type: 'text'
+                sender: auth.currentUser.username,
+                receiver: this.currentReceiver.username,
+                timestamp: new Date()
             };
 
-            // Gửi tin nhắn qua messenger.js
-            await messenger.sendMessage(message);
-            
-            // Hiển thị tin nhắn ngay lập tức
-            this.addMessage(message);
+            // Gửi tin nhắn qua socket
+            if (app && app.socket) {
+                app.socket.emit('send-message', message);
+                // Hiển thị tin nhắn của người gửi
+                this.addMessage(message);
+            }
             
             // Clear input
             this.messageInput.value = '';
@@ -110,36 +129,29 @@ class ChatUI {
     // Thêm tin nhắn vào UI
     addMessage(message) {
         const messageElement = document.createElement('div');
-        messageElement.className = `message ${message.sender === auth.currentUser.id ? 'sent' : 'received'}`;
+        const isSent = message.sender === auth.currentUser.username;
+        messageElement.className = `message-wrapper ${isSent ? 'sent' : 'received'}`;
         
-        // Xử lý hiển thị theo loại tin nhắn
-        if (message.type === 'text') {
-            messageElement.innerHTML = `
+        messageElement.innerHTML = `
+            <div class="message">
                 <div class="message-content">
                     <p>${this.escapeHtml(message.content)}</p>
-                    <span class="message-time">${this.formatTime(message.timestamp)}</span>
                 </div>
-            `;
-        } else if (message.type === 'file') {
-            messageElement.innerHTML = `
-                <div class="message-content file-message">
-                    <i class="file-icon">📎</i>
-                    <a href="${message.fileUrl || '#'}" target="_blank" class="file-link">
-                        ${this.escapeHtml(message.file.name)}
-                    </a>
-                    <span class="file-size">${this.formatFileSize(message.file.size)}</span>
-                    <span class="message-time">${this.formatTime(message.timestamp)}</span>
-                </div>
-            `;
-        }
+            </div>
+        `;
 
         this.messageContainer.appendChild(messageElement);
+        this.chatArea.classList.add('has-messages');
         this.scrollToBottom();
     }
 
     // Xóa tất cả tin nhắn
     clearMessages() {
         this.messageContainer.innerHTML = '';
+        this.chatArea.classList.remove('has-messages');
+        if (this.currentReceiver) {
+            this.messageContainer.appendChild(this.emptyMessage);
+        }
     }
 
     // Cuộn xuống tin nhắn cuối cùng

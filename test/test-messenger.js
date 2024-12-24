@@ -48,6 +48,30 @@ const govDecrypt = async function (secret, [header, ct]) {
   return bufferToString(plaintext)
 }
 
+class MockFile {
+  constructor(content, name, type) {
+    this._blob = new Blob([content], { type });
+    this._name = name;
+    this._size = content.length;
+  }
+
+  get name() { return this._name; }
+  get type() { return this._blob.type; }
+  get size() { return this._size; }
+  
+  slice(...args) {
+    return this._blob.slice(...args);
+  }
+  
+  async text() {
+    return this._blob.text();
+  }
+  
+  async arrayBuffer() {
+    return this._blob.arrayBuffer();
+  }
+}
+
 describe('Messenger', function () {
   this.timeout(5000)
 
@@ -555,5 +579,151 @@ describe('Messenger', function () {
       result = await bob.receiveMessage('alice', ct2)
       expect(result).to.equal(message2)
     })
+
+    describe('file sharing', function () {
+      it('creates correct file metadata', async function () {
+        const alice = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        await alice.initializeForUser('alice')
+        
+        const testFile = new MockFile('Hello, this is a test file content!', 'test.txt', 'text/plain')
+        const metadata = await alice.createFileMetadata(testFile)
+        
+        expect(metadata).to.have.property('filename', 'test.txt')
+        expect(metadata).to.have.property('type', 'text/plain')
+        expect(metadata).to.have.property('size', 35)
+        expect(metadata).to.have.property('totalChunks', 1)
+        expect(metadata).to.have.property('id')
+        expect(metadata).to.have.property('timestamp')
+      })
+
+      it('successfully sends and receives a small file', async function () {
+        const alice = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        const bob = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        
+        await alice.initializeForUser('alice')
+        await bob.initializeForUser('bob')
+        
+        const aliceCertificate = await alice.generateCertificate('alice')
+        const bobCertificate = await bob.generateCertificate('bob')
+        
+        const aliceCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(aliceCertificate))
+        const bobCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(bobCertificate))
+        
+        await alice.receiveCertificate(bobCertificate, bobCertSignature)
+        await bob.receiveCertificate(aliceCertificate, aliceCertSignature)
+
+        let receivedFile = null
+        bob.on('onFileReceived', (data) => {
+          receivedFile = data.file
+        })
+
+        const testFile = new MockFile('Hello, this is a test file content!', 'test.txt', 'text/plain')
+        await alice.sendFile('bob', testFile)
+
+        // Wait for file to be received
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        expect(receivedFile).to.not.be.null
+        expect(receivedFile.name).to.equal('test.txt')
+        expect(receivedFile.type).to.equal('text/plain')
+        expect(receivedFile.size).to.equal(35)
+        
+        const content = await receivedFile.text()
+        expect(content).to.equal('Hello, this is a test file content!')
+      })
+
+      it('handles larger files by chunking', async function () {
+        const alice = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        const bob = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        
+        await alice.initializeForUser('alice')
+        await bob.initializeForUser('bob')
+        
+        const aliceCertificate = await alice.generateCertificate('alice')
+        const bobCertificate = await bob.generateCertificate('bob')
+        
+        const aliceCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(aliceCertificate))
+        const bobCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(bobCertificate))
+        
+        await alice.receiveCertificate(bobCertificate, bobCertSignature)
+        await bob.receiveCertificate(aliceCertificate, aliceCertSignature)
+
+        let receivedFile = null
+        bob.on('onFileReceived', (data) => {
+          receivedFile = data.file
+        })
+
+        // Create a 2MB file
+        const largeContent = new Uint8Array(2 * 1024 * 1024)
+        for (let i = 0; i < largeContent.length; i++) {
+          largeContent[i] = i % 256
+        }
+        
+        const largeFile = new MockFile(largeContent, 'large.bin', 'application/octet-stream')
+        await alice.sendFile('bob', largeFile)
+
+        // Wait for file to be received
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        expect(receivedFile).to.not.be.null
+        expect(receivedFile.name).to.equal('large.bin')
+        expect(receivedFile.type).to.equal('application/octet-stream')
+        expect(receivedFile.size).to.equal(2 * 1024 * 1024)
+        
+        const content = new Uint8Array(await receivedFile.arrayBuffer())
+        for (let i = 0; i < content.length; i++) {
+          expect(content[i]).to.equal(i % 256)
+        }
+      })
+
+      it('tracks progress during file transfer', async function () {
+        const alice = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        const bob = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
+        
+        await alice.initializeForUser('alice')
+        await bob.initializeForUser('bob')
+        
+        const aliceCertificate = await alice.generateCertificate('alice')
+        const bobCertificate = await bob.generateCertificate('bob')
+        
+        const aliceCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(aliceCertificate))
+        const bobCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(bobCertificate))
+        
+        await alice.receiveCertificate(bobCertificate, bobCertSignature)
+        await bob.receiveCertificate(aliceCertificate, aliceCertSignature)
+
+        let uploadProgress = 0
+        let downloadProgress = 0
+        
+        alice.on('onFileProgress', (data) => {
+          if (data.type === 'upload') {
+            uploadProgress = data.percentage
+          }
+        })
+        
+        bob.on('onFileProgress', (data) => {
+          if (data.type === 'download') {
+            downloadProgress = data.percentage
+          }
+        })
+
+        // Create a 1.5MB file to ensure multiple chunks
+        const content = new Uint8Array(1.5 * 1024 * 1024)
+        for (let i = 0; i < content.length; i++) {
+          content[i] = i % 256
+        }
+        
+        const testFile = new MockFile(content, 'progress_test.bin', 'application/octet-stream')
+        await alice.sendFile('bob', testFile)
+
+        // Wait for file to be received
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        expect(uploadProgress).to.be.above(0)
+        expect(downloadProgress).to.be.above(0)
+        expect(uploadProgress).to.equal(100)
+        expect(downloadProgress).to.equal(100)
+      })
+    });
   })
 })

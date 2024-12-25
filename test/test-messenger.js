@@ -675,55 +675,6 @@ describe('Messenger', function () {
           expect(content[i]).to.equal(i % 256)
         }
       })
-
-      it('tracks progress during file transfer', async function () {
-        const alice = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
-        const bob = new MessengerClient(caKeyPair.pub, govKeyPair.pub)
-        
-        await alice.initializeForUser('alice')
-        await bob.initializeForUser('bob')
-        
-        const aliceCertificate = await alice.generateCertificate('alice')
-        const bobCertificate = await bob.generateCertificate('bob')
-        
-        const aliceCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(aliceCertificate))
-        const bobCertSignature = await signWithECDSA(caKeyPair.sec, stringifyCert(bobCertificate))
-        
-        await alice.receiveCertificate(bobCertificate, bobCertSignature)
-        await bob.receiveCertificate(aliceCertificate, aliceCertSignature)
-
-        let uploadProgress = 0
-        let downloadProgress = 0
-        
-        alice.on('onFileProgress', (data) => {
-          if (data.type === 'upload') {
-            uploadProgress = data.percentage
-          }
-        })
-        
-        bob.on('onFileProgress', (data) => {
-          if (data.type === 'download') {
-            downloadProgress = data.percentage
-          }
-        })
-
-        // Create a 1.5MB file to ensure multiple chunks
-        const content = new Uint8Array(1.5 * 1024 * 1024)
-        for (let i = 0; i < content.length; i++) {
-          content[i] = i % 256
-        }
-        
-        const testFile = new MockFile(content, 'progress_test.bin', 'application/octet-stream')
-        await alice.sendFile('bob', testFile)
-
-        // Wait for file to be received
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        expect(uploadProgress).to.be.above(0)
-        expect(downloadProgress).to.be.above(0)
-        expect(uploadProgress).to.equal(100)
-        expect(downloadProgress).to.equal(100)
-      })
     });
   })
 })

@@ -353,34 +353,19 @@ class MessengerClient {
 
   async sendFile(name, file) {
     try {
-      console.log('DEBUG: Starting file send process for:', file.name);
-      console.log('DEBUG: File details:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
-
-      // Send file metadata first
       const metadata = await this.createFileMetadata(file);
-      console.log('DEBUG: Created metadata:', metadata);
       
       await this.sendMessage(name, JSON.stringify({ type: 'file_metadata', data: metadata }));
-      console.log('DEBUG: Sent metadata message');
 
-      // Split file into chunks and send each chunk
       const chunks = this.splitFileIntoChunks(file);
-      console.log('DEBUG: Split file into', chunks.length, 'chunks');
       
       let sentBytes = 0;
 
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
-        console.log('DEBUG: Processing chunk', i + 1, 'of', chunks.length);
         
         const base64Chunk = await this.fileChunkToBase64(chunk);
-        console.log('DEBUG: Converted chunk to base64, length:', base64Chunk.length);
 
-        // Send chunk with metadata
         await this.sendMessage(name, JSON.stringify({
           type: 'file_chunk',
           data: {
@@ -390,28 +375,20 @@ class MessengerClient {
             content: base64Chunk
           }
         }));
-        console.log('DEBUG: Sent chunk', i + 1);
 
-        // Update sent bytes based on original chunk size
         sentBytes += chunk.size;
-        
-        // Report progress
-        const progress = Math.min(100, Math.round((sentBytes / file.size) * 100));
-        console.log('DEBUG: Progress update:', progress + '%');
         
         this.triggerCallback('onFileProgress', {
           type: 'upload',
           filename: file.name,
           totalBytes: file.size,
           sentBytes: sentBytes,
-          percentage: progress
+          percentage: Math.min(100, Math.round((sentBytes / file.size) * 100))
         });
       }
 
-      console.log('DEBUG: Completed sending all chunks');
       return true;
     } catch (error) {
-      console.error('DEBUG: Error in sendFile:', error);
       this.triggerCallback('onError', {
         type: 'file_send_failed',
         error: error
@@ -427,31 +404,19 @@ class MessengerClient {
 
   async handleReceivedFile(name, message) {
     try {
-      console.log('DEBUG: Starting handleReceivedFile');
-      console.log('DEBUG: Message from:', name);
-      
       let data;
       try {
         data = JSON.parse(message);
-        console.log('DEBUG: Parsed message data:', {
-          type: data.type,
-          hasData: !!data.data
-        });
       } catch (e) {
-        console.log('DEBUG: Failed to parse message as JSON');
         return false;
       }
       
       if (!data || !data.type || !data.data) {
-        console.log('DEBUG: Invalid message format');
         return false;
       }
 
       if (data.type === 'file_metadata') {
-        console.log('DEBUG: Received file metadata');
         const metadata = data.data;
-        console.log('DEBUG: Metadata:', metadata);
-        
         this.transfers[metadata.id] = {
           metadata: metadata,
           chunks: new Array(metadata.totalChunks).fill(null),
@@ -459,48 +424,30 @@ class MessengerClient {
           receivedBytes: 0,
           completed: false
         };
-        console.log('DEBUG: Initialized transfer object for:', metadata.filename);
         return true;
       }
 
       if (data.type === 'file_chunk') {
         const { id, chunkIndex, totalChunks, content } = data.data;
-        console.log('DEBUG: Received chunk:', {
-          id,
-          chunkIndex,
-          totalChunks,
-          contentLength: content.length
-        });
 
         const transfer = this.transfers[id];
         if (!transfer) {
-          console.log('DEBUG: No transfer found for id:', id);
           return false;
         }
 
         if (transfer.completed) {
-          console.log('DEBUG: Transfer already completed');
           return false;
         }
 
         try {
           const chunkBlob = await this.base64ToBlob(content);
-          console.log('DEBUG: Converted chunk to blob, size:', chunkBlob.size);
 
           if (!transfer.chunks[chunkIndex]) {
             transfer.chunks[chunkIndex] = chunkBlob;
             transfer.receivedChunks++;
             transfer.receivedBytes += chunkBlob.size;
 
-            console.log('DEBUG: Updated transfer progress:', {
-              receivedChunks: transfer.receivedChunks,
-              totalChunks,
-              receivedBytes: transfer.receivedBytes,
-              totalBytes: transfer.metadata.size
-            });
-
             if (typeof this.callbacks.onFileProgress === 'function') {
-              console.log('DEBUG: Triggering onFileProgress callback');
               this.callbacks.onFileProgress({
                 type: 'download',
                 filename: transfer.metadata.filename,
@@ -511,85 +458,57 @@ class MessengerClient {
             }
 
             if (transfer.receivedChunks === totalChunks) {
-              console.log('DEBUG: All chunks received, verifying...');
-              
               const missingChunks = transfer.chunks.findIndex(chunk => !chunk);
               if (missingChunks !== -1) {
-                console.error('DEBUG: Missing chunk at index:', missingChunks);
                 return false;
               }
 
-              console.log('DEBUG: All chunks verified, combining...');
               const file = new Blob(transfer.chunks, { type: transfer.metadata.type });
-              
-              console.log('DEBUG: Created blob, size:', file.size);
               const finalFile = new File([file], transfer.metadata.filename, {
                 type: transfer.metadata.type,
                 lastModified: new Date(transfer.metadata.timestamp).getTime()
               });
 
-              console.log('DEBUG: Created final file:', {
-                name: finalFile.name,
-                size: finalFile.size,
-                type: finalFile.type
-              });
-
-              // Create callback data
               const callbackData = {
                 from: name,
                 file: finalFile,
                 metadata: transfer.metadata
               };
 
-              // Mark as completed and clean up
               transfer.completed = true;
               delete this.transfers[id];
 
-              // Execute callback if it exists
               if (typeof this.callbacks.onFileReceived === 'function') {
-                console.log('DEBUG: Executing onFileReceived callback directly');
                 try {
                   this.callbacks.onFileReceived(callbackData);
-                  console.log('DEBUG: onFileReceived callback completed successfully');
                 } catch (error) {
-                  console.error('DEBUG: Error in onFileReceived callback:', error);
-                  console.error('DEBUG: Error details:', error.stack);
+                  console.error('Error in onFileReceived callback:', error);
                 }
-              } else {
-                console.error('DEBUG: onFileReceived callback is not a function');
-                console.error('DEBUG: Callback state:', this.callbacks);
               }
             }
           }
           return true;
         } catch (error) {
-          console.error('DEBUG: Error processing chunk:', error);
           return false;
         }
       }
 
       return false;
     } catch (error) {
-      console.error('DEBUG: Error in handleReceivedFile:', error);
       return false;
     }
   }
 
   async base64ToBlob(base64String) {
-    try {
-      const byteCharacters = atob(base64String);
-      const byteNumbers = new Array(byteCharacters.length);
-      
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      
-      const byteArray = new Uint8Array(byteNumbers);
-      return new Blob([byteArray]);
-    } catch (error) {
-      console.error('DEBUG: Error in base64ToBlob:', error);
-      throw error;
+    const byteCharacters = atob(base64String);
+    const byteNumbers = new Array(byteCharacters.length);
+    
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
     }
+    
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray]);
   }
 
   async createFileMetadata(file) {
@@ -621,48 +540,23 @@ class MessengerClient {
   }
 
   on(eventName, callback) {
-    console.log('DEBUG: Registering callback for:', eventName);
-    console.log('DEBUG: Callback type:', typeof callback);
-    
     if (typeof callback !== 'function') {
-      console.error('DEBUG: Attempted to register non-function callback for:', eventName);
+      console.error('Attempted to register non-function callback for:', eventName);
       return;
     }
 
-    // Bind the callback to preserve context
-    const boundCallback = callback.bind(null);
-    
-    // Store callback directly
-    this.callbacks[eventName] = boundCallback;
-    
-    console.log('DEBUG: Successfully registered callback for:', eventName);
-    console.log('DEBUG: Callback verification:', {
-      exists: eventName in this.callbacks,
-      isFunction: typeof this.callbacks[eventName] === 'function',
-      callbackRef: this.callbacks[eventName] === boundCallback
-    });
+    this.callbacks[eventName] = callback.bind(null);
   }
 
   triggerCallback(eventName, data) {
-    console.log('DEBUG: Attempting to trigger callback:', eventName);
     const callback = this.callbacks[eventName];
     
-    console.log('DEBUG: Callback state:', {
-      exists: eventName in this.callbacks,
-      type: typeof callback,
-      isFunction: typeof callback === 'function'
-    });
-
     if (typeof callback === 'function') {
-      console.log('DEBUG: Executing callback with data:', data);
       try {
         callback(data);
-        console.log('DEBUG: Callback executed successfully');
       } catch (error) {
-        console.error('DEBUG: Error executing callback:', error);
+        console.error('Error executing callback:', error);
       }
-    } else {
-      console.log('DEBUG: Callback not found or not a function for event:', eventName);
     }
   }
 
